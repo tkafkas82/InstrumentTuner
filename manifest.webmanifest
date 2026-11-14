@@ -1,7 +1,7 @@
 {
-  "name": "Bouzouki Tuner",
+  "name": "Instrument Tuner",
   "short_name": "Tuner",
-  "description": "Microphone tuner for Greek bouzouki — τετράχορδο, τρίχορδο, μπαγλαμάς.",
+  "description": "Microphone tuner for guitar, bouzouki and more.",
   "start_url": "./",
   "scope": "./",
   "display": "standalone",

@@ -3,8 +3,8 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<title>Bouzouki Tuner</title>
-<meta name="description" content="Microphone tuner for Greek bouzouki — τετράχορδο, τρίχορδο, μπαγλαμάς.">
+<title>Instrument Tuner</title>
+<meta name="description" content="Microphone tuner for guitar, bouzouki and more — τετράχορδο, τρίχορδο, μπαγλαμάς, κιθάρα.">
 <meta name="theme-color" content="#16110d">
 <link rel="manifest" href="manifest.webmanifest">
 <link rel="icon" href="icon.svg" type="image/svg+xml">
@@ -34,8 +34,11 @@
   }
   .wrap { max-width: 560px; margin: 0 auto; padding: 14px 16px calc(24px + env(safe-area-inset-bottom)); }
   header { display: flex; align-items: center; gap: 10px; }
-  header h1 { font-size: 1.15rem; margin: 0; flex: 1; letter-spacing: .02em; }
+  header h1 { font-size: 1.15rem; margin: 0; flex: 1; letter-spacing: .02em; white-space: nowrap; }
+  header select { min-width: 0; flex: 0 1 auto; }
+  @media (max-width: 440px) { header h1 .long { display: none; } }
   header h1 span { color: var(--brass); }
+  header h1 span.long { color: var(--text); }
   select, button { font: inherit; color: inherit; }
   select {
     background: var(--panel); border: 1px solid var(--line); border-radius: 10px;
@@ -83,6 +86,11 @@
   .course.locked { border-color: var(--brass); box-shadow: inset 0 0 0 1px var(--brass); }
   .course .num { font-size: .7rem; color: var(--muted); }
   .course .main { font-size: 1.5rem; font-weight: 700; line-height: 1.2; }
+  .courses.many { gap: 5px; }
+  .courses.many .course { padding: 8px 2px 6px; border-radius: 12px; }
+  .courses.many .course .main { font-size: 1.1rem; }
+  .courses.many .course .num { font-size: .62rem; }
+  .courses.many .course .play { padding: 2px 7px; }
   .course .pair { font-size: .72rem; color: var(--muted); min-height: 1.1em; }
   .course .check { position: absolute; top: 6px; right: 8px; color: var(--good); font-size: .85rem; opacity: 0; transition: opacity .2s; }
   .course.tuned .check { opacity: 1; }
@@ -125,7 +133,7 @@
 <body>
 <div class="wrap">
   <header>
-    <h1>Bouzouki <span>Tuner</span></h1>
+    <h1><span class="long">Instrument </span><span>Tuner</span></h1>
     <select id="tuning" aria-label="Tuning"></select>
     <button class="icon-btn" id="settingsBtn" aria-label="Settings">⚙</button>
   </header>
@@ -186,13 +194,20 @@
 'use strict';
 
 // ---------- Data ----------
-// Courses listed low → high, each as MIDI notes of its pair of strings.
+// Courses listed low → high, each as the MIDI notes of its string(s): one for a single string,
+// two for a doubled course (same note = unison pair, different = octave pair).
 const TUNINGS = [
-  { id: 'tetra',  name: 'Τετράχορδο', courses: [[48, 60], [53, 65], [57, 57], [62, 62]] },
-  { id: 'tri',    name: 'Τρίχορδο', courses: [[50, 62], [57, 57], [62, 62]] },
-  { id: 'bagl',   name: 'Μπαγλαμάς', courses: [[62, 74], [69, 69], [74, 74]] },
-  { id: 'gdad',   name: 'Irish GDAD', courses: [[43, 55], [50, 62], [57, 57], [62, 62]] },
-  { id: 'gdae',   name: 'Irish GDAE', courses: [[43, 55], [50, 62], [57, 57], [64, 64]] },
+  { id: 'gtr-std',   group: 'Κιθάρα · Guitar',     name: 'Standard',     courses: [[40], [45], [50], [55], [59], [64]] },
+  { id: 'gtr-dropd', group: 'Κιθάρα · Guitar',     name: 'Drop D',       courses: [[38], [45], [50], [55], [59], [64]] },
+  { id: 'gtr-half',  group: 'Κιθάρα · Guitar',     name: '½ step down',  courses: [[39], [44], [49], [54], [58], [63]] },
+  { id: 'gtr-dadgad',group: 'Κιθάρα · Guitar',     name: 'DADGAD',       courses: [[38], [45], [50], [55], [57], [62]] },
+  { id: 'gtr-openg', group: 'Κιθάρα · Guitar',     name: 'Open G',       courses: [[38], [43], [50], [55], [59], [62]] },
+  { id: 'gtr-opend', group: 'Κιθάρα · Guitar',     name: 'Open D',       courses: [[38], [45], [50], [54], [57], [62]] },
+  { id: 'tetra',     group: 'Μπουζούκι · Bouzouki', name: 'Τετράχορδο',   courses: [[48, 60], [53, 65], [57, 57], [62, 62]] },
+  { id: 'tri',       group: 'Μπουζούκι · Bouzouki', name: 'Τρίχορδο',     courses: [[50, 62], [57, 57], [62, 62]] },
+  { id: 'bagl',      group: 'Μπουζούκι · Bouzouki', name: 'Μπαγλαμάς',    courses: [[62, 74], [69, 69], [74, 74]] },
+  { id: 'gdad',      group: 'Μπουζούκι · Bouzouki', name: 'Irish GDAD',   courses: [[43, 55], [50, 62], [57, 57], [62, 62]] },
+  { id: 'gdae',      group: 'Μπουζούκι · Bouzouki', name: 'Irish GDAE',   courses: [[43, 55], [50, 62], [57, 57], [64, 64]] },
 ];
 const NAMES = {
   letters: ['C', 'C♯', 'D', 'E♭', 'E', 'F', 'F♯', 'G', 'A♭', 'A', 'B♭', 'B'],
@@ -255,14 +270,16 @@ function drawGoodZone() {
 // ---------- Courses UI ----------
 function renderCourses() {
   const el = $('courses');
-  el.style.gridTemplateColumns = `repeat(${tuning.courses.length}, 1fr)`;
+  el.style.gridTemplateColumns = `repeat(${tuning.courses.length}, minmax(0, 1fr))`;
+  el.classList.toggle('many', tuning.courses.length > 4);
+  const plain = m => noteHtml(m).replace(/<\/?sub>/g, '');
   el.innerHTML = tuning.courses.map((c, ci) => {
-    const octavePair = c[0] !== c[1];
+    const pair = c.length === 1 ? plain(c[0]) : c[0] !== c[1] ? `${plain(c[0])} + ${plain(c[1])}` : `${plain(c[0])} ×2`;
     return `<div class="course" data-ci="${ci}" role="button" tabindex="0" aria-label="Course ${courseNo(ci)}">
       <span class="check">✓</span>
       <div class="num">${courseNo(ci)}η χορδή</div>
       <div class="main">${noteName(c[0])}</div>
-      <div class="pair">${octavePair ? `${noteHtml(c[0]).replace(/<\/?sub>/g, '')} + ${noteHtml(c[1]).replace(/<\/?sub>/g, '')}` : `${noteHtml(c[0]).replace(/<\/?sub>/g, '')} ×2`}</div>
+      <div class="pair">${pair}</div>
       <button class="play" data-play="${ci}" aria-label="Play reference">♪</button>
     </div>`;
   }).join('');
@@ -298,8 +315,9 @@ $('mode').addEventListener('click', e => {
 
 // ---------- Tuning select ----------
 function renderTuningSelect() {
-  $('tuning').innerHTML = TUNINGS.map(t =>
-    `<option value="${t.id}">${t.name} · ${t.courses.map(c => noteName(c[0])).join(' ')}</option>`).join('');
+  const groups = [...new Set(TUNINGS.map(t => t.group))];
+  $('tuning').innerHTML = groups.map(g => `<optgroup label="${g}">` + TUNINGS.filter(t => t.group === g).map(t =>
+    `<option value="${t.id}">${t.name} · ${t.courses.map(c => noteName(c[0])).join(' ')}</option>`).join('') + '</optgroup>').join('');
   $('tuning').value = tuning.id;
 }
 renderTuningSelect();
@@ -383,12 +401,12 @@ async function start() {
     });
     const src = ctx.createMediaStreamSource(stream);
     const hp = ctx.createBiquadFilter();
-    hp.type = 'highpass'; hp.frequency.value = 60;
+    hp.type = 'highpass'; hp.frequency.value = 40;
     analyser = ctx.createAnalyser();
     analyser.fftSize = 4096;
     src.connect(hp).connect(analyser);
     buf = new Float32Array(analyser.fftSize);
-    detect = PitchDetector.create(ctx.sampleRate, analyser.fftSize, 75, 1000);
+    detect = PitchDetector.create(ctx.sampleRate, analyser.fftSize, 60, 1000);
     running = true;
     $('startBtn').textContent = '⏹ Stop';
     $('startBtn').classList.add('on');
@@ -445,7 +463,7 @@ function match(f) {
 function analyze(now) {
   analyser.getFloatTimeDomainData(buf);
   const r = detect(buf);
-  if (r && r.clarity > 0.85 && r.freq > 75 && r.freq < 1000) {
+  if (r && r.clarity > 0.85 && r.freq > 60 && r.freq < 1000) {
     lastHeard = now;
     const f = smooth(r.freq);
     reading = { f, ...match(f) };

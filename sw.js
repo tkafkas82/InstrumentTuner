@@ -1,4 +1,4 @@
-const CACHE = 'bouzouki-tuner-v1';
+const CACHE = 'instrument-tuner-v2';
 const ASSETS = ['./', 'index.html', 'pitch.js', 'manifest.webmanifest', 'icon.svg'];
 
 self.addEventListener('install', e => {
