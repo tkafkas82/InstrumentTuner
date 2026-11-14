@@ -205,9 +205,9 @@ const TUNINGS = [
   { id: 'gtr-opend', group: 'Κιθάρα · Guitar',     name: 'Open D',       courses: [[38], [45], [50], [54], [57], [62]] },
   { id: 'tetra',     group: 'Μπουζούκι · Bouzouki', name: 'Τετράχορδο',   courses: [[48, 60], [53, 65], [57, 57], [62, 62]] },
   { id: 'tri',       group: 'Μπουζούκι · Bouzouki', name: 'Τρίχορδο',     courses: [[50, 62], [57, 57], [62, 62]] },
-  { id: 'bagl',      group: 'Μπουζούκι · Bouzouki', name: 'Μπαγλαμάς',    courses: [[62, 74], [69, 69], [74, 74]] },
   { id: 'gdad',      group: 'Μπουζούκι · Bouzouki', name: 'Irish GDAD',   courses: [[43, 55], [50, 62], [57, 57], [62, 62]] },
   { id: 'gdae',      group: 'Μπουζούκι · Bouzouki', name: 'Irish GDAE',   courses: [[43, 55], [50, 62], [57, 57], [64, 64]] },
+  { id: 'bagl',      group: 'Μπαγλαμάς · Baglamas', name: 'Standard',     courses: [[62, 74], [69, 69], [74, 74]] },
 ];
 const NAMES = {
   letters: ['C', 'C♯', 'D', 'E♭', 'E', 'F', 'F♯', 'G', 'A♭', 'A', 'B♭', 'B'],
@@ -448,9 +448,11 @@ function match(f) {
   let best = null;
   tuning.courses.forEach((c, ci) => {
     if (locked != null && ci !== locked) return;
-    c.forEach(target => {
+    c.forEach((target, si) => {
       const cents = (m - target) * 100;
-      if (!best || Math.abs(cents) < Math.abs(best.cents)) best = { ci, target, cents };
+      // An octave string ties with another course's main string (e.g. Ρε4 in τρίχορδο): prefer the main one.
+      const score = Math.abs(cents) + (si > 0 && target !== c[0] ? 1 : 0);
+      if (!best || score < best.score) best = { ci, target, cents, score };
     });
   });
   if (locked == null && Math.abs(best.cents) > AUTO_RANGE) {
