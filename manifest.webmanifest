@@ -1,0 +1,14 @@
+{
+  "name": "Bouzouki Tuner",
+  "short_name": "Tuner",
+  "description": "Microphone tuner for Greek bouzouki — τετράχορδο, τρίχορδο, μπαγλαμάς.",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#16110d",
+  "theme_color": "#16110d",
+  "icons": [
+    { "src": "icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any maskable" }
+  ]
+}

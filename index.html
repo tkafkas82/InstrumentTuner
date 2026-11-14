@@ -1,0 +1,551 @@
+<!doctype html>
+<html lang="el">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Bouzouki Tuner</title>
+<meta name="description" content="Microphone tuner for Greek bouzouki — τετράχορδο, τρίχορδο, μπαγλαμάς.">
+<meta name="theme-color" content="#16110d">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="icon.svg">
+<style>
+  :root {
+    --bg: #16110d;
+    --panel: #221a14;
+    --panel-2: #2c221a;
+    --line: #3d3027;
+    --text: #f3e9dc;
+    --muted: #a8988a;
+    --brass: #d9a556;
+    --good: #5fd38d;
+    --flat: #5aa9ff;
+    --sharp: #ff7a59;
+    color-scheme: dark;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; }
+  body {
+    background: radial-gradient(120% 80% at 50% 0%, #2a1f16 0%, var(--bg) 60%) fixed, var(--bg);
+    color: var(--text);
+    font: 16px/1.4 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+    min-height: 100vh;
+    -webkit-tap-highlight-color: transparent;
+  }
+  .wrap { max-width: 560px; margin: 0 auto; padding: 14px 16px calc(24px + env(safe-area-inset-bottom)); }
+  header { display: flex; align-items: center; gap: 10px; }
+  header h1 { font-size: 1.15rem; margin: 0; flex: 1; letter-spacing: .02em; }
+  header h1 span { color: var(--brass); }
+  select, button { font: inherit; color: inherit; }
+  select {
+    background: var(--panel); border: 1px solid var(--line); border-radius: 10px;
+    padding: 8px 10px; max-width: 62vw;
+  }
+  .icon-btn {
+    background: var(--panel); border: 1px solid var(--line); border-radius: 10px;
+    width: 40px; height: 40px; display: grid; place-items: center; cursor: pointer;
+  }
+
+  .tuner {
+    margin-top: 14px; background: var(--panel); border: 1px solid var(--line);
+    border-radius: 20px; padding: 12px 12px 14px; position: relative; overflow: hidden;
+    transition: box-shadow .25s, border-color .25s;
+  }
+  .tuner.intune { border-color: var(--good); box-shadow: 0 0 0 1px var(--good), 0 0 40px -10px var(--good); }
+  .mode { position: absolute; top: 10px; left: 12px; font-size: .78rem; color: var(--muted); }
+  .mode button {
+    background: var(--panel-2); border: 1px solid var(--line); border-radius: 999px;
+    padding: 3px 10px; cursor: pointer; font-size: .78rem;
+  }
+  .hz { position: absolute; top: 12px; right: 14px; font-size: .78rem; color: var(--muted); font-variant-numeric: tabular-nums; text-align: right; }
+  svg.gauge { display: block; width: 100%; height: auto; margin-top: 18px; }
+  .tick { stroke: #6d5a4a; stroke-width: 1.5; }
+  .tick.major { stroke: #a8988a; stroke-width: 2; }
+  .tick-label { fill: var(--muted); font-size: 10px; text-anchor: middle; }
+  #needle { transition: none; }
+  #needleLine { stroke: var(--text); stroke-width: 3; stroke-linecap: round; transition: stroke .2s; }
+  .readout { text-align: center; margin-top: 4px; }
+  .note { font-size: 4.2rem; font-weight: 700; line-height: 1; letter-spacing: -.02em; transition: color .2s; }
+  .note sub { font-size: 1.4rem; font-weight: 500; color: var(--muted); vertical-align: baseline; margin-left: 2px; }
+  .cents { font-variant-numeric: tabular-nums; color: var(--muted); margin-top: 2px; min-height: 1.4em; }
+  .status { text-align: center; margin-top: 6px; font-weight: 600; min-height: 1.5em; }
+  .flat { color: var(--flat); } .sharp { color: var(--sharp); } .good { color: var(--good); }
+  canvas#trace { display: block; width: 100%; height: 46px; margin-top: 8px; border-radius: 8px; background: #1b150f; }
+
+  .courses { display: grid; gap: 8px; margin-top: 14px; }
+  .course {
+    background: var(--panel); border: 1px solid var(--line); border-radius: 14px;
+    padding: 10px 6px 8px; text-align: center; cursor: pointer; position: relative;
+    transition: border-color .15s, background .15s, transform .1s; user-select: none;
+  }
+  .course:active { transform: scale(.97); }
+  .course.active { border-color: var(--brass); background: var(--panel-2); }
+  .course.locked { border-color: var(--brass); box-shadow: inset 0 0 0 1px var(--brass); }
+  .course .num { font-size: .7rem; color: var(--muted); }
+  .course .main { font-size: 1.5rem; font-weight: 700; line-height: 1.2; }
+  .course .pair { font-size: .72rem; color: var(--muted); min-height: 1.1em; }
+  .course .check { position: absolute; top: 6px; right: 8px; color: var(--good); font-size: .85rem; opacity: 0; transition: opacity .2s; }
+  .course.tuned .check { opacity: 1; }
+  .course .play {
+    margin-top: 6px; background: transparent; border: 1px solid var(--line); border-radius: 999px;
+    padding: 2px 10px; font-size: .8rem; cursor: pointer; color: var(--muted);
+  }
+  .course .play:hover { color: var(--text); border-color: var(--muted); }
+  .hint { text-align: center; color: var(--muted); font-size: .8rem; margin-top: 10px; }
+
+  .start {
+    display: block; width: 100%; margin-top: 14px; padding: 14px; border-radius: 14px; border: 0;
+    background: var(--brass); color: #1b130b; font-weight: 700; font-size: 1.05rem; cursor: pointer;
+  }
+  .start.on { background: var(--panel-2); color: var(--text); border: 1px solid var(--line); }
+  .error { color: var(--sharp); text-align: center; margin-top: 10px; font-size: .9rem; }
+
+  dialog {
+    background: var(--panel); color: var(--text); border: 1px solid var(--line); border-radius: 16px;
+    width: min(420px, calc(100vw - 32px)); padding: 18px;
+  }
+  dialog::backdrop { background: rgba(0,0,0,.6); }
+  dialog h2 { margin: 0 0 12px; font-size: 1.1rem; }
+  .row { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 10px 0; border-top: 1px solid var(--line); }
+  .row:first-of-type { border-top: 0; }
+  .row small { display: block; color: var(--muted); }
+  .stepper { display: flex; align-items: center; gap: 6px; }
+  .stepper button, .seg button {
+    background: var(--panel-2); border: 1px solid var(--line); border-radius: 8px; padding: 6px 10px; cursor: pointer;
+  }
+  .stepper output { min-width: 4.5ch; text-align: center; font-variant-numeric: tabular-nums; }
+  .seg { display: flex; }
+  .seg button { border-radius: 0; }
+  .seg button:first-child { border-radius: 8px 0 0 8px; }
+  .seg button:last-child { border-radius: 0 8px 8px 0; }
+  .seg button.on { background: var(--brass); color: #1b130b; border-color: var(--brass); }
+  .close { margin-top: 14px; width: 100%; padding: 10px; border-radius: 10px; border: 1px solid var(--line); background: var(--panel-2); cursor: pointer; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <h1>Bouzouki <span>Tuner</span></h1>
+    <select id="tuning" aria-label="Tuning"></select>
+    <button class="icon-btn" id="settingsBtn" aria-label="Settings">⚙</button>
+  </header>
+
+  <section class="tuner" id="tuner">
+    <div class="mode" id="mode"></div>
+    <div class="hz" id="hz">&nbsp;</div>
+    <svg class="gauge" viewBox="0 0 300 175" aria-hidden="true">
+      <g id="ticks"></g>
+      <path id="goodZone" fill="none" stroke="#5fd38d" stroke-opacity=".35" stroke-width="10"/>
+      <g id="needle"><line id="needleLine" x1="150" y1="160" x2="150" y2="34"/><circle cx="150" cy="160" r="6" fill="#d9a556"/></g>
+    </svg>
+    <div class="readout">
+      <div class="note" id="note">—</div>
+      <div class="cents" id="cents">&nbsp;</div>
+    </div>
+    <div class="status" id="status">Tap “Start” and pluck a string</div>
+    <canvas id="trace"></canvas>
+  </section>
+
+  <div class="courses" id="courses"></div>
+  <div class="hint">Tap a course to lock onto it (tap again for auto) · ♪ plays a reference tone</div>
+
+  <button class="start" id="startBtn">🎙 Start tuning</button>
+  <div class="error" id="error" hidden></div>
+</div>
+
+<dialog id="settings">
+  <h2>Settings</h2>
+  <div class="row">
+    <div>Reference A4<small>Concert pitch, usually 440 Hz</small></div>
+    <div class="stepper">
+      <button data-a4="-1" aria-label="Lower A4">−</button>
+      <output id="a4">440</output>
+      <button data-a4="1" aria-label="Raise A4">+</button>
+    </div>
+  </div>
+  <div class="row">
+    <div>Note names</div>
+    <div class="seg" id="notation">
+      <button data-n="letters">C D E</button>
+      <button data-n="greek">Ντο Ρε Μι</button>
+    </div>
+  </div>
+  <div class="row">
+    <div>In-tune tolerance<small>How close counts as “in tune”</small></div>
+    <div class="seg" id="tolerance">
+      <button data-t="2">±2¢</button>
+      <button data-t="3">±3¢</button>
+      <button data-t="5">±5¢</button>
+    </div>
+  </div>
+  <button class="close" id="closeSettings">Done</button>
+</dialog>
+
+<script src="pitch.js"></script>
+<script>
+'use strict';
+
+// ---------- Data ----------
+// Courses listed low → high, each as MIDI notes of its pair of strings.
+const TUNINGS = [
+  { id: 'tetra',  name: 'Τετράχορδο', courses: [[48, 60], [53, 65], [57, 57], [62, 62]] },
+  { id: 'tri',    name: 'Τρίχορδο', courses: [[50, 62], [57, 57], [62, 62]] },
+  { id: 'bagl',   name: 'Μπαγλαμάς', courses: [[62, 74], [69, 69], [74, 74]] },
+  { id: 'gdad',   name: 'Irish GDAD', courses: [[43, 55], [50, 62], [57, 57], [62, 62]] },
+  { id: 'gdae',   name: 'Irish GDAE', courses: [[43, 55], [50, 62], [57, 57], [64, 64]] },
+];
+const NAMES = {
+  letters: ['C', 'C♯', 'D', 'E♭', 'E', 'F', 'F♯', 'G', 'A♭', 'A', 'B♭', 'B'],
+  greek:   ['Ντο', 'Ντο♯', 'Ρε', 'Μι♭', 'Μι', 'Φα', 'Φα♯', 'Σολ', 'Λα♭', 'Λα', 'Σι♭', 'Σι'],
+};
+const AUTO_RANGE = 300;     // cents: beyond this from every string, show plain chromatic reading
+const HOLD_MS = 600;        // how long a string must stay in tune before it's ticked
+
+// ---------- State ----------
+const store = {
+  get(k, d) { try { const v = localStorage.getItem('bz.' + k); return v == null ? d : JSON.parse(v); } catch { return d; } },
+  set(k, v) { try { localStorage.setItem('bz.' + k, JSON.stringify(v)); } catch {} },
+};
+let tuning = TUNINGS.find(t => t.id === store.get('tuning', 'tetra')) || TUNINGS[0];
+let a4 = store.get('a4', 440);
+let notation = store.get('notation', 'greek');
+let tolerance = store.get('tolerance', 3);
+let locked = null;           // course index or null for auto
+const tuned = new Set();
+
+let audioCtx = null, stream = null, analyser = null, buf = null, detect = null, wakeLock = null;
+let running = false, lastAnalysis = 0, lastHeard = 0, muteUntil = 0, inTuneSince = 0;
+let hist = [];
+let shownCents = 0, targetCents = 0, reading = null;
+const trace = [];
+
+const $ = id => document.getElementById(id);
+const midiToHz = m => a4 * 2 ** ((m - 69) / 12);
+const hzToMidi = f => 69 + 12 * Math.log2(f / a4);
+const noteName = m => NAMES[notation][((Math.round(m) % 12) + 12) % 12];
+const octave = m => Math.floor(Math.round(m) / 12) - 1;
+const noteHtml = m => `${noteName(m)}<sub>${octave(m)}</sub>`;
+const courseNo = ci => tuning.courses.length - ci;   // the highest course is "1st"
+
+// ---------- Gauge ----------
+const CX = 150, CY = 160, R = 126, SPAN = 60;   // ±50 cents → ±60°
+const angleFor = c => Math.max(-1, Math.min(1, c / 50)) * SPAN;
+function polar(deg, r) {
+  const a = (deg - 90) * Math.PI / 180;
+  return [CX + r * Math.cos(a), CY + r * Math.sin(a)];
+}
+function buildGauge() {
+  let s = '';
+  for (let c = -50; c <= 50; c += 5) {
+    const major = c % 25 === 0, a = angleFor(c);
+    const [x1, y1] = polar(a, R), [x2, y2] = polar(a, R - (major ? 14 : 8));
+    s += `<line class="tick${major ? ' major' : ''}" x1="${x1}" y1="${y1}" x2="${x2}" y2="${y2}"/>`;
+    if (major) {
+      const [lx, ly] = polar(a, R + 11);
+      s += `<text class="tick-label" x="${lx}" y="${ly + 3}">${c > 0 ? '+' + c : c}</text>`;
+    }
+  }
+  $('ticks').innerHTML = s;
+}
+function drawGoodZone() {
+  const [x1, y1] = polar(angleFor(-tolerance), R - 4), [x2, y2] = polar(angleFor(tolerance), R - 4);
+  $('goodZone').setAttribute('d', `M${x1},${y1} A${R - 4},${R - 4} 0 0 1 ${x2},${y2}`);
+}
+
+// ---------- Courses UI ----------
+function renderCourses() {
+  const el = $('courses');
+  el.style.gridTemplateColumns = `repeat(${tuning.courses.length}, 1fr)`;
+  el.innerHTML = tuning.courses.map((c, ci) => {
+    const octavePair = c[0] !== c[1];
+    return `<div class="course" data-ci="${ci}" role="button" tabindex="0" aria-label="Course ${courseNo(ci)}">
+      <span class="check">✓</span>
+      <div class="num">${courseNo(ci)}η χορδή</div>
+      <div class="main">${noteName(c[0])}</div>
+      <div class="pair">${octavePair ? `${noteHtml(c[0]).replace(/<\/?sub>/g, '')} + ${noteHtml(c[1]).replace(/<\/?sub>/g, '')}` : `${noteHtml(c[0]).replace(/<\/?sub>/g, '')} ×2`}</div>
+      <button class="play" data-play="${ci}" aria-label="Play reference">♪</button>
+    </div>`;
+  }).join('');
+  updateCourseClasses();
+  renderMode();
+}
+function updateCourseClasses(activeCi) {
+  document.querySelectorAll('.course').forEach(el => {
+    const ci = +el.dataset.ci;
+    el.classList.toggle('locked', locked === ci);
+    el.classList.toggle('active', activeCi === ci);
+    el.classList.toggle('tuned', tuned.has(ci));
+  });
+}
+function renderMode() {
+  $('mode').innerHTML = locked == null
+    ? '<button id="modeBtn">Auto</button>'
+    : `<button id="modeBtn">🔒 ${courseNo(locked)}η · tap for auto</button>`;
+}
+$('courses').addEventListener('click', e => {
+  const play = e.target.closest('[data-play]');
+  if (play) { e.stopPropagation(); playCourse(+play.dataset.play); return; }
+  const card = e.target.closest('.course');
+  if (!card) return;
+  const ci = +card.dataset.ci;
+  locked = locked === ci ? null : ci;
+  hist = [];
+  renderMode(); updateCourseClasses();
+});
+$('mode').addEventListener('click', e => {
+  if (e.target.id === 'modeBtn' && locked != null) { locked = null; renderMode(); updateCourseClasses(); }
+});
+
+// ---------- Tuning select ----------
+function renderTuningSelect() {
+  $('tuning').innerHTML = TUNINGS.map(t =>
+    `<option value="${t.id}">${t.name} · ${t.courses.map(c => noteName(c[0])).join(' ')}</option>`).join('');
+  $('tuning').value = tuning.id;
+}
+renderTuningSelect();
+$('tuning').addEventListener('change', e => {
+  tuning = TUNINGS.find(t => t.id === e.target.value);
+  store.set('tuning', tuning.id);
+  locked = null; tuned.clear(); hist = [];
+  renderCourses();
+});
+
+// ---------- Settings ----------
+function renderSettings() {
+  $('a4').textContent = a4;
+  document.querySelectorAll('#notation button').forEach(b => b.classList.toggle('on', b.dataset.n === notation));
+  document.querySelectorAll('#tolerance button').forEach(b => b.classList.toggle('on', +b.dataset.t === tolerance));
+}
+$('settingsBtn').addEventListener('click', () => { renderSettings(); $('settings').showModal(); });
+$('closeSettings').addEventListener('click', () => $('settings').close());
+$('settings').addEventListener('click', e => {
+  const b = e.target.closest('button');
+  if (!b) return;
+  if (b.dataset.a4) { a4 = Math.max(415, Math.min(466, a4 + +b.dataset.a4)); store.set('a4', a4); tuned.clear(); }
+  if (b.dataset.n) { notation = b.dataset.n; store.set('notation', notation); renderCourses(); renderTuningSelect(); }
+  if (b.dataset.t) { tolerance = +b.dataset.t; store.set('tolerance', tolerance); drawGoodZone(); }
+  renderSettings();
+});
+
+// ---------- Reference tones (Karplus–Strong pluck) ----------
+function ensureCtx() {
+  if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+  if (audioCtx.state === 'suspended') audioCtx.resume();
+  return audioCtx;
+}
+const pluckCache = new Map();
+function pluckBuffer(ctx, freq) {
+  const sr = ctx.sampleRate, n = Math.max(2, Math.round(sr / freq - 0.5));
+  const key = n;
+  if (pluckCache.has(key)) return { buffer: pluckCache.get(key), rate: freq * (n + 0.5) / sr };
+  const len = Math.floor(sr * 3), out = new Float32Array(len), ring = new Float32Array(n);
+  let prev = 0;
+  for (let i = 0; i < n; i++) { const r = Math.random() * 2 - 1; ring[i] = (r + prev) / 2; prev = r; }
+  const decay = 0.9985;
+  for (let i = 0, p = 0; i < len; i++) {
+    const q = (p + 1) % n, v = ring[p];
+    out[i] = v;
+    ring[p] = decay * 0.5 * (v + ring[q]);
+    p = q;
+  }
+  for (let i = 0; i < 64; i++) out[i] *= i / 64;
+  const buffer = ctx.createBuffer(1, len, sr);
+  buffer.copyToChannel(out, 0);
+  pluckCache.set(key, buffer);
+  return { buffer, rate: freq * (n + 0.5) / sr };
+}
+function playCourse(ci) {
+  const ctx = ensureCtx();
+  const notes = [...new Set(tuning.courses[ci])];
+  const gain = ctx.createGain();
+  gain.gain.value = 0.35 / notes.length ** 0.5;
+  gain.connect(ctx.destination);
+  notes.forEach((m, i) => {
+    const { buffer, rate } = pluckBuffer(ctx, midiToHz(m));
+    const src = ctx.createBufferSource();
+    src.buffer = buffer; src.playbackRate.value = rate;
+    src.connect(gain);
+    src.start(ctx.currentTime + i * 0.02);
+  });
+  muteUntil = performance.now() + 2600;   // don't let the speaker tick strings as "tuned"
+}
+
+// ---------- Listening ----------
+async function start() {
+  $('error').hidden = true;
+  if (!navigator.mediaDevices?.getUserMedia) {
+    return showError('Microphone access needs a secure page (https or localhost).');
+  }
+  try {
+    const ctx = ensureCtx();
+    stream = await navigator.mediaDevices.getUserMedia({
+      audio: { echoCancellation: false, noiseSuppression: false, autoGainControl: false },
+    });
+    const src = ctx.createMediaStreamSource(stream);
+    const hp = ctx.createBiquadFilter();
+    hp.type = 'highpass'; hp.frequency.value = 60;
+    analyser = ctx.createAnalyser();
+    analyser.fftSize = 4096;
+    src.connect(hp).connect(analyser);
+    buf = new Float32Array(analyser.fftSize);
+    detect = PitchDetector.create(ctx.sampleRate, analyser.fftSize, 75, 1000);
+    running = true;
+    $('startBtn').textContent = '⏹ Stop';
+    $('startBtn').classList.add('on');
+    $('status').textContent = 'Pluck a string…';
+    requestWakeLock();
+  } catch (err) {
+    showError(err.name === 'NotAllowedError' ? 'Microphone permission was denied.' : 'Could not open the microphone: ' + err.message);
+  }
+}
+function stop() {
+  running = false;
+  stream?.getTracks().forEach(t => t.stop());
+  stream = null; analyser = null; reading = null;
+  wakeLock?.release().catch(() => {}); wakeLock = null;
+  $('startBtn').textContent = '🎙 Start tuning';
+  $('startBtn').classList.remove('on');
+  setIdle('Tap “Start” and pluck a string');
+}
+function showError(msg) { $('error').textContent = msg; $('error').hidden = false; }
+async function requestWakeLock() {
+  try { wakeLock = await navigator.wakeLock?.request('screen'); } catch {}
+}
+document.addEventListener('visibilitychange', () => {
+  if (document.visibilityState === 'visible' && running) requestWakeLock();
+});
+$('startBtn').addEventListener('click', () => running ? stop() : start());
+
+const median = a => { const s = [...a].sort((x, y) => x - y); return s[s.length >> 1]; };
+function smooth(f) {
+  if (hist.length && Math.abs(1200 * Math.log2(f / median(hist))) > 40) hist = [];
+  hist.push(f);
+  if (hist.length > 7) hist.shift();
+  return median(hist);
+}
+
+// Nearest target string (in auto mode across all courses, else within the locked course).
+function match(f) {
+  const m = hzToMidi(f);
+  let best = null;
+  tuning.courses.forEach((c, ci) => {
+    if (locked != null && ci !== locked) return;
+    c.forEach(target => {
+      const cents = (m - target) * 100;
+      if (!best || Math.abs(cents) < Math.abs(best.cents)) best = { ci, target, cents };
+    });
+  });
+  if (locked == null && Math.abs(best.cents) > AUTO_RANGE) {
+    const near = Math.round(m);
+    return { ci: null, target: near, cents: (m - near) * 100 };
+  }
+  return best;
+}
+
+function analyze(now) {
+  analyser.getFloatTimeDomainData(buf);
+  const r = detect(buf);
+  if (r && r.clarity > 0.85 && r.freq > 75 && r.freq < 1000) {
+    lastHeard = now;
+    const f = smooth(r.freq);
+    reading = { f, ...match(f) };
+    showReading(now);
+  } else if (now - lastHeard > 1200 && reading) {
+    reading = null; hist = [];
+    setIdle('Pluck a string…');
+  }
+}
+
+function showReading(now) {
+  const { f, ci, target, cents } = reading;
+  targetCents = cents;
+  $('note').innerHTML = noteHtml(target);
+  $('hz').innerHTML = `${f.toFixed(1)} Hz<br>${ci == null ? '' : 'target ' + midiToHz(target).toFixed(1)}`;
+  const abs = Math.abs(cents);
+  $('cents').textContent = `${cents > 0 ? '+' : cents < 0 ? '−' : '±'}${abs.toFixed(abs < 10 ? 1 : 0)} ¢`;
+
+  const good = abs <= tolerance;
+  const cls = good ? 'good' : cents < 0 ? 'flat' : 'sharp';
+  $('note').className = 'note ' + cls;
+  $('needleLine').style.stroke = good ? 'var(--good)' : cents < 0 ? 'var(--flat)' : 'var(--sharp)';
+  $('tuner').classList.toggle('intune', good && ci != null);
+
+  let status;
+  if (ci == null) status = 'Not near a string of this tuning';
+  else if (good) status = '✓ In tune';
+  else if (abs > 100) status = cents < 0 ? `▲ Tighten — ${(abs / 100).toFixed(1)} semitones low` : `▼ Loosen — ${(abs / 100).toFixed(1)} semitones high`;
+  else status = cents < 0 ? '▲ Tighten (flat)' : '▼ Loosen (sharp)';
+  $('status').textContent = status;
+  $('status').className = 'status ' + cls;
+
+  if (ci != null && now > muteUntil) {
+    if (good) {
+      if (!inTuneSince) inTuneSince = now;
+      if (now - inTuneSince > HOLD_MS && !tuned.has(ci)) {
+        tuned.add(ci);
+        navigator.vibrate?.(40);
+      }
+    } else {
+      inTuneSince = 0;
+      if (abs > tolerance + 6) tuned.delete(ci);
+    }
+  }
+  updateCourseClasses(ci);
+}
+
+function setIdle(msg) {
+  targetCents = 0; inTuneSince = 0;
+  $('note').innerHTML = '—'; $('note').className = 'note';
+  $('cents').innerHTML = '&nbsp;'; $('hz').innerHTML = '&nbsp;';
+  $('status').textContent = msg; $('status').className = 'status';
+  $('needleLine').style.stroke = '';
+  $('tuner').classList.remove('intune');
+  updateCourseClasses();
+}
+
+// ---------- Trace (last ~4 s of cents) ----------
+const tc = $('trace'), tctx = tc.getContext('2d');
+function drawTrace() {
+  const dpr = devicePixelRatio || 1, w = tc.clientWidth * dpr, h = tc.clientHeight * dpr;
+  if (tc.width !== w || tc.height !== h) { tc.width = w; tc.height = h; }
+  tctx.clearRect(0, 0, w, h);
+  const y = c => h / 2 - Math.max(-1, Math.min(1, c / 50)) * (h / 2 - 3 * dpr);
+  tctx.fillStyle = 'rgba(95,211,141,.15)';
+  tctx.fillRect(0, y(tolerance), w, y(-tolerance) - y(tolerance));
+  tctx.strokeStyle = 'rgba(168,152,138,.35)'; tctx.lineWidth = dpr;
+  tctx.beginPath(); tctx.moveTo(0, h / 2); tctx.lineTo(w, h / 2); tctx.stroke();
+  tctx.lineWidth = 2 * dpr; tctx.lineJoin = 'round';
+  const step = w / 239;
+  let pen = false;
+  tctx.beginPath();
+  trace.forEach((c, i) => {
+    const x = w - (trace.length - 1 - i) * step;
+    if (c == null) { pen = false; return; }
+    pen ? tctx.lineTo(x, y(c)) : tctx.moveTo(x, y(c));
+    pen = true;
+  });
+  tctx.strokeStyle = '#d9a556'; tctx.stroke();
+}
+
+// ---------- Main loop ----------
+function frame(now) {
+  requestAnimationFrame(frame);
+  if (running && analyser && now - lastAnalysis > 30) { lastAnalysis = now; analyze(now); }
+  shownCents += (targetCents - shownCents) * 0.22;
+  $('needle').setAttribute('transform', `rotate(${angleFor(shownCents)} ${CX} ${CY})`);
+  trace.push(reading && reading.ci != null ? reading.cents : null);
+  if (trace.length > 240) trace.shift();
+  drawTrace();
+}
+
+buildGauge();
+drawGoodZone();
+renderCourses();
+requestAnimationFrame(frame);
+
+if ('serviceWorker' in navigator && location.protocol.startsWith('http')) {
+  navigator.serviceWorker.register('sw.js').catch(() => {});
+}
+</script>
+</body>
+</html>
